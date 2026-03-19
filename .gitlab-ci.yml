@@ -1,0 +1,72 @@
+stages:
+  - build
+  - deploy
+
+build-backend:
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - >-
+      /kaniko/executor
+      --context "${CI_PROJECT_DIR}/backend"
+      --dockerfile "${CI_PROJECT_DIR}/backend/Dockerfile"
+      --destination "${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHA}"
+      --destination "${CI_REGISTRY_IMAGE}/backend:latest"
+      --cache=true
+
+build-frontend:
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - >-
+      /kaniko/executor
+      --context "${CI_PROJECT_DIR}/frontend"
+      --dockerfile "${CI_PROJECT_DIR}/frontend/Dockerfile"
+      --destination "${CI_REGISTRY_IMAGE}/frontend:${CI_COMMIT_SHA}"
+      --destination "${CI_REGISTRY_IMAGE}/frontend:latest"
+      --cache=true
+
+build-toolbox:
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - >-
+      /kaniko/executor
+      --context "${CI_PROJECT_DIR}/toolbox"
+      --dockerfile "${CI_PROJECT_DIR}/toolbox/Dockerfile"
+      --destination "${CI_REGISTRY_IMAGE}/toolbox:${CI_COMMIT_SHA}"
+      --destination "${CI_REGISTRY_IMAGE}/toolbox:latest"
+      --cache=true
+
+update-manifest:
+  stage: deploy
+  image: alpine/git:latest
+  variables:
+    GITHUB_REPO: "https://x-access-token:${GITHUB_PAT}@github.com/BenRachmiel/talos-cluster.git"
+    MANIFEST_PATH: "infrastructure/preamp-downloader/deployment.yaml"
+    IMAGE_TAG: "${CI_COMMIT_SHA}"
+  script:
+    - git clone --depth 1 "${GITHUB_REPO}" /tmp/talos-cluster
+    - cd /tmp/talos-cluster
+    - "sed -i \"s|image: ${CI_REGISTRY_IMAGE}/backend:.*|image: ${CI_REGISTRY_IMAGE}/backend:${IMAGE_TAG}|\" ${MANIFEST_PATH}"
+    - "sed -i \"s|image: ${CI_REGISTRY_IMAGE}/frontend:.*|image: ${CI_REGISTRY_IMAGE}/frontend:${IMAGE_TAG}|\" ${MANIFEST_PATH}"
+    - git config user.email "gitlab-ci@benrachmiel.org"
+    - git config user.name "GitLab CI"
+    - git add "${MANIFEST_PATH}"
+    - 'git diff --cached --quiet && echo "No changes to commit" && exit 0'
+    - 'git commit -m "chore(music-downloader): update images to ${CI_COMMIT_SHORT_SHA}"'
+    - git push origin main
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"

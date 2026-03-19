@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: music-downloader
+  namespace: navidrome
+  labels:
+    app: music-downloader
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: music-downloader
+  template:
+    metadata:
+      labels:
+        app: music-downloader
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: compute1
+      containers:
+        - name: music-downloader
+          image: gitlab.benrachmiel.org:5050/bvf2104/music-downloader-from-csv:latest
+          imagePullPolicy: Always
+          env:
+            - name: MAX_CONCURRENT
+              value: "4"
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: music
+              mountPath: /music
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+      volumes:
+        - name: music
+          persistentVolumeClaim:
+            claimName: navidrome-music

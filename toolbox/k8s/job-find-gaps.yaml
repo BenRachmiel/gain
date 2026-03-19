@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: toolbox-find-gaps-
+  namespace: pedals
+spec:
+  template:
+    spec:
+      imagePullSecrets:
+        - name: gitlab-registry
+      containers:
+        - name: toolbox
+          image: gitlab.benrachmiel.org:5050/bvf2104/music-downloader-from-csv/toolbox:latest
+          args: ["tools.find_gaps", "/music"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: music
+              mountPath: /music
+      volumes:
+        - name: music
+          persistentVolumeClaim:
+            claimName: preamp-music
+      restartPolicy: Never
+  backoffLimit: 1

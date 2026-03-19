@@ -1,0 +1,17 @@
+{{- if not .Values.persistence.music.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "gain-downloader.fullname" . }}-music
+  labels:
+    {{- include "gain-downloader.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.music.accessMode }}
+  {{- if .Values.persistence.music.storageClass }}
+  storageClassName: {{ .Values.persistence.music.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.music.size }}
+{{- end }}

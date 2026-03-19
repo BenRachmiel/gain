@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: music-downloader-frontend
+  namespace: navidrome
+  labels:
+    app: music-downloader-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: music-downloader-frontend
+  template:
+    metadata:
+      labels:
+        app: music-downloader-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: gitlab.benrachmiel.org:5050/bvf2104/music-downloader-from-csv/frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi

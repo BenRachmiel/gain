@@ -1,0 +1,131 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gain-downloader.fullname" . }}
+  labels:
+    {{- include "gain-downloader.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "gain-downloader.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gain-downloader.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- if .Values.imagePullSecrets.existingSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecrets.existingSecret }}
+      {{- end }}
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: frontend
+          image: "{{ required "image.frontend.repository is required" .Values.image.frontend.repository }}:{{ .Values.image.frontend.tag }}"
+          imagePullPolicy: {{ .Values.image.frontend.pullPolicy }}
+          ports:
+            - name: frontend
+              containerPort: 8080
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+        - name: backend
+          image: "{{ required "image.backend.repository is required" .Values.image.backend.repository }}:{{ .Values.image.backend.tag }}"
+          imagePullPolicy: {{ .Values.image.backend.pullPolicy }}
+          ports:
+            - name: backend
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: MUSIC_DIR
+              value: /music
+            - name: MAX_CONCURRENT
+              value: {{ .Values.config.maxConcurrent | quote }}
+            - name: BIND_ADDR
+              value: {{ .Values.config.bindAddr | quote }}
+            - name: SOURCE_API
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "gain-downloader.secretName" . }}
+                  key: SOURCE_API
+            - name: SOURCE_MIRRORS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "gain-downloader.secretName" . }}
+                  key: SOURCE_MIRRORS
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          volumeMounts:
+            - name: music
+              mountPath: /music
+        - name: oauth2-proxy
+          image: "{{ .Values.image.oauthProxy.repository }}:{{ .Values.image.oauthProxy.tag }}"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+          ports:
+            - name: oauth-proxy
+              containerPort: 4180
+              protocol: TCP
+          args:
+            - --upstream=http://localhost:8080
+            - --http-address=0.0.0.0:4180
+            - --provider=oidc
+            - --oidc-issuer-url={{ required "oauthProxy.issuerURL is required" .Values.oauthProxy.issuerURL }}
+            - --client-id={{ required "oauthProxy.clientID is required" .Values.oauthProxy.clientID }}
+            - --redirect-url={{ required "oauthProxy.redirectURL is required" .Values.oauthProxy.redirectURL }}
+            - --cookie-name={{ .Values.oauthProxy.cookieName }}
+            - --cookie-secure=true
+            - --reverse-proxy=true
+            - --pass-user-headers=true
+            - --email-domain=*
+            {{- range .Values.oauthProxy.extraArgs }}
+            - {{ . | quote }}
+            {{- end }}
+          env:
+            - name: OAUTH2_PROXY_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "gain-downloader.secretName" . }}
+                  key: OAUTH2_PROXY_CLIENT_SECRET
+            - name: OAUTH2_PROXY_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "gain-downloader.secretName" . }}
+                  key: OAUTH2_PROXY_COOKIE_SECRET
+      volumes:
+        - name: music
+          persistentVolumeClaim:
+            {{- if .Values.persistence.music.existingClaim }}
+            claimName: {{ .Values.persistence.music.existingClaim }}
+            {{- else }}
+            claimName: {{ include "gain-downloader.fullname" . }}-music
+            {{- end }}

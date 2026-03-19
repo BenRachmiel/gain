@@ -1,0 +1,1424 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Music Downloader</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9835;</text></svg>">
+    <style>
+      :root {
+        --bg-primary: #111;
+        --bg-secondary: #0d0d0d;
+        --bg-tertiary: #141414;
+        --bg-quaternary: #161616;
+        --border-subtle: #1a1a1a;
+        --border-muted: #222;
+        --text-primary: #ccc;
+        --text-secondary: #888;
+        --text-muted: #555;
+        --text-dim: #444;
+        --accent-gold: #c9a85c;
+        --accent-green: #7cbf7c;
+        --accent-red: #bf6060;
+        --accent-blue: #1a73e8;
+        --button-bg: #eee;
+        --button-fg: #111;
+        --button-hover: #fff;
+        --button-disabled: #333;
+        --log-bg: #0a0a0a;
+      }
+
+      .light-mode {
+        --bg-primary: #fafafa;
+        --bg-secondary: #f4f4f5;
+        --bg-tertiary: #e4e4e7;
+        --bg-quaternary: #ececec;
+        --border-subtle: #d4d4d8;
+        --border-muted: #a1a1aa;
+        --text-primary: #18181b;
+        --text-secondary: #52525b;
+        --text-muted: #71717a;
+        --text-dim: #a1a1aa;
+        --accent-gold: #b4944d;
+        --accent-green: #6aa869;
+        --accent-red: #a44b4b;
+        --accent-blue: #0366d6;
+        --button-bg: #fff;
+        --button-fg: #18181b;
+        --button-hover: #e4e4e7;
+        --button-disabled: #d4d4d8;
+        --log-bg: #f4f4f5;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        line-height: 1.5;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      /* --- Layout: main + side dock --- */
+      .layout {
+        display: flex;
+        height: 100vh;
+      }
+      .main {
+        flex: 1;
+        min-width: 0;
+        overflow-y: auto;
+        padding: 0 1.5rem 2.5rem;
+      }
+      .main-inner {
+        max-width: 720px;
+        margin: 0 auto;
+      }
+
+      .dock {
+        width: 300px;
+        min-width: 300px;
+        background: var(--bg-secondary);
+        border-left: 1px solid var(--border-subtle);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .dock-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem 1rem 0.75rem;
+        border-bottom: 1px solid var(--border-subtle);
+        flex-shrink: 0;
+      }
+      .dock-header h2 {
+        margin: 0;
+        font-weight: 500;
+        font-size: 0.82rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .dock-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0.25rem;
+      }
+      .dock-body::-webkit-scrollbar {
+        width: 4px;
+      }
+      .dock-body::-webkit-scrollbar-thumb {
+        background: var(--border-muted);
+        border-radius: 2px;
+      }
+      .dock-footer {
+        flex-shrink: 0;
+        border-top: 1px solid var(--border-subtle);
+      }
+
+      .dock-empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: var(--text-dim);
+        font-size: 0.82rem;
+      }
+
+      /* Mobile: dock is hidden, toggled as fullscreen overlay */
+      .dock-close-btn {
+        display: none;
+      }
+
+
+       @media (max-width: 860px) {
+         .layout {
+           display: block;
+           height: 100vh;
+           overflow: hidden;
+         }
+        .main {
+          height: 100vh;
+          overflow-y: auto;
+          padding-bottom: 4rem;
+        }
+        .dock {
+          position: fixed;
+          inset: 0;
+          z-index: 100;
+          width: 100%;
+          min-width: 0;
+          transform: translateY(100%);
+          transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+          border-left: none;
+          border-top: none;
+        }
+        .dock.open {
+          transform: translateY(0);
+        }
+        .dock-close-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: none;
+          border: none;
+          color: var(--text-muted);
+          cursor: pointer;
+          font-size: 1.2rem;
+          padding: 0.1rem 0.4rem;
+          margin: 0;
+          transition: color 0.15s;
+          line-height: 1;
+        }
+        .dock-close-btn:hover {
+          color: var(--text-secondary);
+          background: none;
+        }
+        #queueToggle {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          position: fixed;
+          bottom: 1.25rem;
+          right: 1.25rem;
+          z-index: 50;
+          background: var(--button-bg);
+          color: var(--button-fg);
+          border: none;
+          padding: 0.65rem 1.1rem;
+          border-radius: 50px;
+          font-size: 0.85rem;
+          font-weight: 600;
+          cursor: pointer;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+          margin: 0;
+        }
+        #queueToggle:hover {
+          background: var(--button-hover);
+        }
+        #queueToggle .badge {
+          background: var(--accent-gold);
+          color: var(--button-fg);
+          border-radius: 50%;
+          width: 1.1rem;
+          height: 1.1rem;
+          font-size: 0.65rem;
+          font-weight: 700;
+          display: none;
+          align-items: center;
+          justify-content: center;
+        }
+        #queueToggle .badge.visible {
+          display: flex;
+        }
+      }
+
+      @media (min-width: 861px) {
+        #queueToggle {
+          display: none;
+        }
+      }
+
+      /* --- Nav --- */
+      nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1.25rem 0 1rem;
+        margin-bottom: 1.5rem;
+        border-bottom: 1px solid var(--border-subtle);
+      }
+      .nav-title {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+      }
+      .nav-title svg {
+        opacity: 0.7;
+        flex-shrink: 0;
+      }
+      nav h1 {
+        font-weight: 600;
+        font-size: 1.05rem;
+        color: var(--text-primary);
+        letter-spacing: -0.01em;
+        margin: 0;
+      }
+      nav .links {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+      }
+      nav a {
+        color: var(--text-muted);
+        text-decoration: none;
+        font-size: 0.8rem;
+        transition: color 0.15s;
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+      }
+      nav a:hover {
+        color: var(--text-primary);
+      }
+
+      /* Theme toggle button */
+      .theme-toggle {
+        background: none;
+        border: none;
+        color: inherit;
+        cursor: pointer;
+        padding: 0.4rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: opacity 0.15s;
+      }
+      .theme-toggle:hover {
+        opacity: 0.7;
+      }
+      .theme-toggle svg {
+        width: 18px;
+        height: 18px;
+        stroke: currentColor;
+        stroke-width: 1.5;
+      }
+
+      h2 {
+        font-weight: 500;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        margin: 1.75rem 0 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      /* --- Search --- */
+      .search-bar {
+        display: flex;
+        gap: 0.5rem;
+      }
+      .search-bar input {
+        flex: 1;
+        background: var(--bg-quaternary);
+        border: 1px solid var(--border-muted);
+        color: var(--text-primary);
+        padding: 0.55rem 0.75rem;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-family: inherit;
+        transition: border-color 0.15s;
+      }
+      .search-bar input:focus {
+        outline: none;
+        border-color: var(--text-dim);
+      }
+      .search-bar button {
+        margin-top: 0;
+      }
+
+      .search-results {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 0.75rem;
+        margin-top: 1rem;
+      }
+      .album-card {
+        background: var(--bg-quaternary);
+        border: 1px solid var(--border-muted);
+        border-radius: 8px;
+        overflow: hidden;
+        cursor: pointer;
+        transition: border-color 0.15s;
+        position: relative;
+      }
+      .album-card:hover {
+        border-color: var(--text-dim);
+      }
+      .album-card.resolving {
+        pointer-events: none;
+      }
+      .album-card img {
+        width: 100%;
+        aspect-ratio: 1;
+        object-fit: cover;
+        display: block;
+        background: var(--border-subtle);
+      }
+      .album-card .info {
+        padding: 0.5rem 0.6rem;
+      }
+      .album-card .album-title {
+        font-size: 0.8rem;
+        color: var(--text-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .album-card .album-artist {
+        font-size: 0.72rem;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .album-card .album-year {
+        font-size: 0.68rem;
+        color: var(--text-dim);
+      }
+
+      /* Resolve progress overlay on album card */
+      .album-card .card-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(17, 17, 17, 0.82);
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+      }
+      .album-card.resolving .card-overlay {
+        display: flex;
+      }
+
+      .card-ring {
+        transform: rotate(-90deg);
+        overflow: visible;
+      }
+      .card-ring .ring-bg {
+        fill: none;
+        stroke: var(--border-muted);
+        stroke-width: 2.5;
+      }
+      .card-ring .ring-fill {
+        fill: none;
+        stroke: var(--text-secondary);
+        stroke-width: 2.5;
+        stroke-linecap: round;
+        stroke-dasharray: 87.96;
+        stroke-dashoffset: 87.96;
+        transition: stroke-dashoffset 0.35s ease;
+      }
+      .card-overlay-text {
+        font-size: 0.7rem;
+        color: var(--text-secondary);
+      }
+
+      .search-loading {
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        padding: 1rem 0;
+      }
+
+      /* --- Preview (in dock) --- */
+      #preview {
+        border-bottom: 1px solid var(--border-subtle);
+        padding-bottom: 0.75rem;
+        margin-bottom: 0.5rem;
+      }
+      .preview-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 0.5rem;
+      }
+      .preview-header h3 {
+        font-weight: 500;
+        font-size: 0.78rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin: 0;
+      }
+      .preview-dismiss {
+        background: none;
+        border: none;
+        color: var(--text-dim);
+        cursor: pointer;
+        font-size: 1rem;
+        padding: 0;
+        margin: 0;
+        line-height: 1;
+        transition: color 0.15s;
+      }
+      .preview-dismiss:hover {
+        color: var(--text-secondary);
+        background: none;
+      }
+      .folder-info {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-subtle);
+        border-radius: 8px;
+        padding: 0.6rem 0.7rem;
+      }
+      .folder-info .match {
+        color: var(--accent-green);
+        font-size: 0.75rem;
+      }
+      .folder-info .no-match {
+        color: var(--accent-gold);
+        font-size: 0.75rem;
+      }
+      .override {
+        margin-top: 0.4rem;
+        display: flex;
+        gap: 0.4rem;
+        align-items: center;
+      }
+      .override label {
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        min-width: 2.8rem;
+      }
+      .override input {
+        background: var(--border-subtle);
+        border: 1px solid var(--border-muted);
+        color: var(--text-primary);
+        padding: 0.3rem 0.5rem;
+        border-radius: 5px;
+        flex: 1;
+        font-size: 0.78rem;
+        transition: border-color 0.15s;
+        min-width: 0;
+      }
+      .override input:focus {
+        outline: none;
+        border-color: var(--text-dim);
+      }
+      .target-path {
+        margin-top: 0.35rem;
+        font-size: 0.68rem;
+        color: var(--text-dim);
+        font-family: "SF Mono", Menlo, monospace;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .track-list {
+        max-height: 200px;
+        overflow-y: auto;
+        margin-top: 0.4rem;
+      }
+      .track-list::-webkit-scrollbar {
+        width: 3px;
+      }
+      .track-list::-webkit-scrollbar-thumb {
+        background: var(--border-muted);
+        border-radius: 2px;
+      }
+      .track-row {
+        display: flex;
+        align-items: center;
+        padding: 0.2rem 0;
+        border-bottom: 1px solid var(--bg-quaternary);
+        font-size: 0.78rem;
+      }
+      .track-row:last-child {
+        border-bottom: none;
+      }
+      .track-num {
+        color: var(--text-dim);
+        width: 1.6rem;
+        flex-shrink: 0;
+        text-align: right;
+        margin-right: 0.5rem;
+        font-size: 0.72rem;
+        font-family: "SF Mono", Menlo, monospace;
+      }
+      .track-name {
+        flex: 1;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: var(--text-primary);
+      }
+      .track-dur {
+        color: var(--text-dim);
+        font-size: 0.72rem;
+        margin-left: 0.5rem;
+        font-family: "SF Mono", Menlo, monospace;
+        flex-shrink: 0;
+      }
+
+      button {
+        background: var(--button-bg);
+        color: var(--button-fg);
+        border: none;
+        padding: 0.55rem 1.4rem;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        cursor: pointer;
+        margin-top: 1rem;
+        transition: background 0.15s;
+      }
+      button:hover {
+        background: var(--button-hover);
+      }
+      button:disabled {
+        background: var(--button-disabled);
+        color: var(--text-secondary);
+        cursor: not-allowed;
+      }
+      #queueBtn {
+        width: 100%;
+        margin-top: 0.4rem;
+        margin-bottom: 0.5rem;
+        font-size: 0.82rem;
+        padding: 0.45rem 0;
+      }
+
+      .btn-secondary {
+        background: var(--border-subtle);
+        color: var(--text-secondary);
+        font-size: 0.75rem;
+        padding: 0.3rem 0.7rem;
+        margin-top: 0;
+        border-radius: 6px;
+      }
+      .btn-secondary:hover {
+        background: var(--border-muted);
+        color: var(--text-secondary);
+      }
+
+      /* --- Queue (dock content) --- */
+      .job-card {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-subtle);
+        border-radius: 8px;
+        padding: 0.65rem 0.75rem;
+        margin-bottom: 0.4rem;
+        transition: border-color 0.2s;
+      }
+      .job-card.active {
+        border-color: var(--border-muted);
+      }
+      .job-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 0.5rem;
+      }
+      .job-title {
+        font-size: 0.8rem;
+        color: var(--text-primary);
+        line-height: 1.3;
+        flex: 1;
+        min-width: 0;
+      }
+      .job-title .job-artist {
+        color: var(--text-muted);
+        font-size: 0.72rem;
+        display: block;
+        margin-top: 1px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .job-meta {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-shrink: 0;
+      }
+      .job-count {
+        font-size: 0.72rem;
+        color: var(--text-dim);
+        font-family: "SF Mono", Menlo, monospace;
+      }
+      .job-status {
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-weight: 500;
+      }
+      .job-status.queued {
+        color: var(--text-muted);
+      }
+      .job-status.active {
+        color: var(--accent-gold);
+      }
+      .job-status.done {
+        color: var(--accent-green);
+      }
+      .job-status.error {
+        color: var(--accent-red);
+      }
+      .job-progress {
+        margin-top: 0.4rem;
+        height: 2px;
+        background: var(--border-subtle);
+        border-radius: 1px;
+        overflow: hidden;
+      }
+      .job-progress-fill {
+        height: 100%;
+        width: 0%;
+        background: var(--button-disabled);
+        border-radius: 1px;
+        transition:
+          width 0.3s,
+          background 0.3s;
+      }
+      .job-card.active .job-progress-fill {
+        background: var(--accent-gold);
+      }
+      .job-card.done .job-progress-fill {
+        background: var(--accent-green);
+      }
+
+      .job-track-status {
+        margin-top: 0.3rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.68rem;
+        color: var(--text-muted);
+        font-family: "SF Mono", Menlo, monospace;
+      }
+      .job-track-status-bar {
+        flex: 1;
+        height: 1px;
+        background: var(--border-subtle);
+        border-radius: 1px;
+        overflow: hidden;
+      }
+      .job-track-status-fill {
+        height: 100%;
+        background: var(--text-dim);
+        border-radius: 1px;
+        transition: width 0.2s;
+        width: 0%;
+      }
+
+      #log {
+        margin: 0.5rem 0;
+        background: var(--log-bg);
+        border: 1px solid var(--border-subtle);
+        border-radius: 6px;
+        padding: 0.5rem 0.65rem;
+        font-family: "SF Mono", Menlo, monospace;
+        font-size: 0.7rem;
+        max-height: 120px;
+        overflow-y: auto;
+        color: var(--text-secondary);
+      }
+      #log:empty {
+        display: none;
+      }
+      #log div {
+        padding: 1px 0;
+      }
+      #log::-webkit-scrollbar {
+        width: 3px;
+      }
+      #log::-webkit-scrollbar-thumb {
+        background: var(--border-muted);
+        border-radius: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <!-- Main content area -->
+      <div class="main">
+        <div class="main-inner">
+          <nav>
+            <div class="nav-title">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M9 18V5l12-2v13" />
+                <circle cx="6" cy="18" r="3" />
+                <circle cx="18" cy="16" r="3" />
+              </svg>
+              <h1>Music Downloader</h1>
+            </div>
+
+            <div class="links">
+              <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+                <svg id="themeIconSun" viewBox="0 0 24 24" fill="none" style="display: none;">
+                  <circle cx="12" cy="12" r="5"/>
+                  <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                  <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                </svg>
+                <svg id="themeIconMoon" viewBox="0 0 24 24" fill="none" style="display: inline;">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
+              </button>
+            </div>
+          </nav>
+
+          <div class="search-bar">
+            <input
+              type="text"
+              id="searchInput"
+              placeholder="Search albums..."
+              onkeydown="if (event.key === 'Enter') doSearch();"
+            />
+            <button onclick="doSearch()">Search</button>
+          </div>
+          <div id="searchLoading" class="search-loading" style="display: none">
+            Searching...
+          </div>
+          <div id="searchResults" class="search-results"></div>
+        </div>
+      </div>
+
+      <!-- Queue dock -->
+      <div class="dock" id="dock">
+        <div class="dock-header">
+          <h2>Queue</h2>
+          <div style="display: flex; gap: 0.5rem; align-items: center">
+            <button
+              class="btn-secondary"
+              id="clearBtn"
+              onclick="clearCompleted()"
+              style="display: none"
+            >
+              Clear done
+            </button>
+            <button
+              class="dock-close-btn"
+              onclick="toggleDock(false)"
+              title="Close"
+            >
+              &#x2715;
+            </button>
+          </div>
+        </div>
+        <div class="dock-body" id="dockBody">
+          <!-- Preview (appears when album selected) -->
+          <div id="preview" style="display: none">
+            <div class="preview-header">
+              <h3>Add to queue</h3>
+              <button
+                class="preview-dismiss"
+                onclick="
+                  document.getElementById('preview').style.display = 'none'
+                "
+              >
+                &times;
+              </button>
+            </div>
+            <button id="queueBtn" onclick="queueJob()">Add to Queue</button>
+            <div class="folder-info">
+              <div id="artistInfo"></div>
+              <div class="override">
+                <label>Artist</label>
+                <input type="text" id="artistOverride" />
+              </div>
+              <div class="override">
+                <label>Album</label>
+                <input type="text" id="albumOverride" />
+              </div>
+              <div class="target-path" id="targetPath"></div>
+            </div>
+            <div class="track-list" id="trackList"></div>
+          </div>
+
+          <div class="dock-empty" id="dockEmpty">No downloads yet</div>
+          <div id="jobList"></div>
+        </div>
+        <div class="dock-footer">
+          <div id="log"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile queue toggle -->
+    <button id="queueToggle" onclick="toggleDock(true)">
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M2 4h12M2 8h12M2 12h12" />
+      </svg>
+      Queue
+      <span class="badge" id="queueBadge"></span>
+    </button>
+
+    <script>
+      let tracks = []; // tracks resolved so far for current album
+      let totalTracks = 0; // total expected tracks (from meta event)
+      let resolvedCount = 0; // tracks resolved so far
+      let resolveEs = null; // EventSource for current album resolution
+      let resolvingCard = null; // album card currently resolving
+      let pendingJobId = null; // job ID if user queued before resolution finished
+      let sentTrackCount = 0; // tracks already sent to pendingJobId
+
+      let lastEventId = 0;
+      let sse = null;
+
+      const RING_CIRC = 87.96; // 2π × r=14
+
+      let selectedTracks = new Set();
+
+      // --- Theme toggle ---
+      function toggleTheme() {
+        const body = document.body;
+        const isLight = body.classList.toggle("light-mode");
+        localStorage.setItem("theme", isLight ? "light" : "dark");
+        updateThemeIcon();
+      }
+
+      function updateThemeIcon() {
+        const sun = document.getElementById("themeIconSun");
+        const moon = document.getElementById("themeIconMoon");
+        if (document.body.classList.contains("light-mode")) {
+          sun.style.display = "inline";
+          moon.style.display = "none";
+        } else {
+          sun.style.display = "none";
+          moon.style.display = "inline";
+        }
+      }
+
+      // Check theme on page load
+      (function initTheme() {
+        const saved = localStorage.getItem("theme");
+        if (saved === "light") {
+          document.body.classList.add("light-mode");
+          updateThemeIcon();
+        }
+      })();
+
+
+      // --- Mobile dock toggle ---
+      function toggleDock(open) {
+        document.getElementById("dock").classList.toggle("open", open);
+      }
+
+      // --- Search ---
+      function doSearch() {
+        const q = document.getElementById("searchInput").value.trim();
+        if (!q) return;
+        const results = document.getElementById("searchResults");
+        const loading = document.getElementById("searchLoading");
+        results.innerHTML = "";
+        loading.style.display = "block";
+        document.getElementById("preview").style.display = "none";
+
+        fetch(`search?q=${encodeURIComponent(q)}`)
+          .then((r) => r.json())
+          .then((data) => {
+            loading.style.display = "none";
+            if (data.error) {
+              results.innerHTML = `<div class="search-loading">${esc(data.error)}</div>`;
+              return;
+            }
+            for (const a of data.albums) {
+              const card = document.createElement("div");
+              card.className = "album-card";
+              card.id = `card-${a.id}`;
+              card.onclick = () => selectAlbum(a.id);
+              card.innerHTML = `
+              <img src="${esc(a.cover)}" alt="" loading="lazy" onerror="this.style.display='none'">
+              <div class="info">
+                <div class="album-title" title="${esc(a.title)}">${esc(a.title)}</div>
+                <div class="album-artist">${esc(a.artist)}</div>
+                <div class="album-year">${esc(a.year)} &middot; ${a.tracks} tracks</div>
+              </div>
+              <div class="card-overlay">
+                <svg class="card-ring" viewBox="0 0 36 36" width="44" height="44">
+                  <circle class="ring-bg" cx="18" cy="18" r="14"/>
+                  <circle class="ring-fill" cx="18" cy="18" r="14"/>
+                </svg>
+                <div class="card-overlay-text" id="ring-text-${a.id}">0 / ?</div>
+              </div>`;
+              results.appendChild(card);
+            }
+          })
+          .catch((err) => {
+            loading.style.display = "none";
+            alert("Search failed: " + err);
+          });
+      }
+
+      function setRing(card, resolved, total) {
+        const fill = card.querySelector(".ring-fill");
+        if (!fill) return;
+        const pct = total > 0 ? resolved / total : 0;
+        fill.style.strokeDashoffset = RING_CIRC * (1 - pct);
+      }
+
+      function selectAlbum(albumId) {
+        // Cancel any in-progress resolution
+        if (resolveEs) {
+          resolveEs.close();
+          resolveEs = null;
+        }
+        if (resolvingCard) resolvingCard.classList.remove("resolving");
+        pendingJobId = null;
+        sentTrackCount = 0;
+
+        tracks = [];
+        selectedTracks.clear();
+        resolvedCount = 0;
+        totalTracks = 0;
+
+        const card = document.getElementById(`card-${albumId}`);
+        if (card) {
+          setRing(card, 0, 1);
+          card.classList.add("resolving");
+          resolvingCard = card;
+        }
+
+        resolveEs = new EventSource(`resolve/${albumId}`);
+
+        resolveEs.addEventListener("meta", (e) => {
+          const d = JSON.parse(e.data);
+          totalTracks = d.total;
+          setupPreviewShell(d);
+          if (window.innerWidth <= 860) toggleDock(true);
+        });
+
+        resolveEs.addEventListener("track", (e) => {
+          const track = JSON.parse(e.data);
+          resolvedCount++;
+
+          if (pendingJobId) {
+            // Resolution is ongoing but user already queued — send new track directly to job
+            fetch(`jobs/${pendingJobId}/tracks`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ tracks: [track] }),
+            });
+            sentTrackCount++;
+          } else {
+            tracks.push(track);
+            appendTrackRow(track);
+          }
+
+          if (card) {
+            setRing(card, resolvedCount, totalTracks);
+            const txt = card.querySelector(`#ring-text-${albumId}`);
+            if (txt) txt.textContent = `${resolvedCount} / ${totalTracks}`;
+          }
+          updateQueueBtn();
+        });
+
+        resolveEs.addEventListener("done", () => {
+          resolveEs.close();
+          resolveEs = null;
+          if (card) card.classList.remove("resolving");
+          resolvingCard = null;
+          if (pendingJobId) {
+            fetch(`jobs/${pendingJobId}/resolve`, { method: "POST" });
+          }
+          updateQueueBtn();
+        });
+
+        resolveEs.addEventListener("error", (e) => {
+          resolveEs.close();
+          resolveEs = null;
+          if (card) card.classList.remove("resolving");
+          resolvingCard = null;
+          const d = e.data ? JSON.parse(e.data) : null;
+          if (d && d.error) alert("Resolve failed: " + d.error);
+        });
+
+        // Also fires on connection error (no data); clean up silently
+        resolveEs.onerror = () => {
+          if (resolveEs) {
+            resolveEs.close();
+            resolveEs = null;
+          }
+          if (card) card.classList.remove("resolving");
+          resolvingCard = null;
+        };
+      }
+
+      function setupPreviewShell(d) {
+        document.getElementById("preview").style.display = "block";
+        document.getElementById("dockEmpty").style.display = "none";
+
+        const btn = document.getElementById("queueBtn");
+        btn.disabled = true;
+        btn.textContent = "Resolving…";
+
+        const info = document.getElementById("artistInfo");
+        if (d.matched_artist) {
+          info.innerHTML = `<span class="match">Matched:</span> <strong>${esc(d.matched_artist)}</strong>`;
+          document.getElementById("artistOverride").value = d.matched_artist;
+        } else {
+          info.innerHTML = `<span class="no-match">New artist:</span> <strong>${esc(d.artist)}</strong>`;
+          document.getElementById("artistOverride").value = d.artist;
+        }
+        document.getElementById("albumOverride").value = d.album;
+        updateTargetPath();
+
+        document.getElementById("trackList").innerHTML = `
+          <div class="track-select-controls" style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; gap: 0.5rem">
+            <button class="btn-secondary" onclick="selectAllTracks()">Select all</button>
+            <button class="btn-secondary" onclick="deselectAllTracks()">Deselect all</button>
+          </div>
+        `;
+      }
+
+      function appendTrackRow(track) {
+        const list = document.getElementById("trackList");
+        
+        // Check if select controls exist, add them if not
+        const controls = list.querySelector(".track-select-controls");
+        if (!controls) {
+          list.innerHTML = `
+            <div class="track-select-controls" style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; gap: 0.5rem">
+              <button class="btn-secondary" onclick="selectAllTracks()">Select all</button>
+              <button class="btn-secondary" onclick="deselectAllTracks()">Deselect all</button>
+            </div>
+          `;
+        }
+
+        const row = document.createElement("div");
+        row.className = "track-row";
+        row.setAttribute("data-track-index", track.index);
+        // Default: checkbox checked (all tracks selected)
+        row.innerHTML = `<input type="checkbox" class="track-select" data-index="${track.index}" checked onchange="toggleTrack(this)">
+          <span class="track-num">${track.index}</span><span class="track-name" title="${esc(track.title)}">${esc(track.title)}</span><span class="track-dur">${esc(track.duration)}</span>`;
+        list.appendChild(row);
+        list.scrollTop = list.scrollHeight;
+        selectedTracks.add(String(track.index));
+      }
+
+      function toggleTrack(checkbox) {
+        const trackIdx = checkbox.getAttribute("data-index");
+        if (selectedTracks.has(trackIdx)) {
+          selectedTracks.delete(trackIdx);
+          checkbox.checked = false;
+        } else {
+          selectedTracks.add(trackIdx);
+          checkbox.checked = true;
+        }
+      }
+
+      function selectAllTracks() {
+        const tracks = document.querySelectorAll(".track-select");
+        tracks.forEach(t => {
+          t.checked = true;
+          selectedTracks.add(t.getAttribute("data-index"));
+        });
+      }
+
+      function deselectAllTracks() {
+        const tracks = document.querySelectorAll(".track-select");
+        tracks.forEach(t => {
+          t.checked = false;
+          selectedTracks.delete(t.getAttribute("data-index"));
+        });
+      }
+
+      function getSelectedTrackCount() {
+        return selectedTracks.size;
+      }
+
+      function updateQueueBtn() {
+        const btn = document.getElementById("queueBtn");
+        if (!btn || pendingJobId) return;
+        const done = !resolveEs;
+
+        if (tracks.length === 0) {
+          btn.disabled = true;
+          btn.textContent = "Resolving…";
+        } else if (done) {
+          btn.disabled = false;
+          const selectedCount = getSelectedTrackCount();
+          btn.textContent = `Add Selected: ${selectedCount} track${selectedCount !== 1 ? 's' : ''}`;
+        } else {
+          btn.disabled = false;
+          btn.textContent = `Queue now (${tracks.length} / ${totalTracks || "?"})`;
+        }
+      }
+
+      function updateTargetPath() {
+        const a = document.getElementById("artistOverride").value;
+        const b = document.getElementById("albumOverride").value;
+        document.getElementById("targetPath").textContent = `/music/${a}/${b}/`;
+      }
+
+      function queueJob() {
+        const btn = document.getElementById("queueBtn");
+        btn.disabled = true;
+
+        const artist = document.getElementById("artistOverride").value;
+        const album = document.getElementById("albumOverride").value;
+        const resolved = !resolveEs;
+
+        // Filter to only selected tracks
+        const finalTracks = tracks.filter(t => selectedTracks.has(String(t.index)));
+
+        fetch("start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tracks: finalTracks,
+            artist,
+            album,
+            resolved,
+            total_tracks: totalTracks || finalTracks.length,
+          }),
+        })
+          .then((r) => r.json())
+          .then((data) => {
+            pendingJobId = data.job_id;
+            sentTrackCount = tracks.length;
+            addJobCard(
+              data.job_id,
+              artist,
+              album,
+              totalTracks || tracks.length,
+            );
+            connectSSE();
+            document.getElementById("preview").style.display = "none";
+            btn.textContent = resolved ? "Queued" : `Queued (resolving…)`;
+          })
+          .catch((err) => {
+            btn.disabled = false;
+            updateQueueBtn();
+            alert("Failed to queue: " + err);
+          });
+      }
+
+      // --- Queue / Job UI ---
+
+      const jobMeta = {};
+      let hasCompleted = false;
+
+      function hideDockEmpty() {
+        const el = document.getElementById("dockEmpty");
+        if (el) el.style.display = "none";
+      }
+
+      function updateQueueBadge() {
+        const badge = document.getElementById("queueBadge");
+        if (!badge) return;
+        const active = document.querySelectorAll(".job-card.active").length;
+        const queued = document.querySelectorAll(
+          ".job-card:not(.done):not(.error)",
+        ).length;
+        const count = queued;
+        badge.textContent = count;
+        badge.classList.toggle("visible", count > 0);
+      }
+
+      function addJobCard(id, artist, album, trackCount) {
+        if (document.getElementById(`job-${id}`)) return;
+        hideDockEmpty();
+        jobMeta[id] = { total: trackCount, done: 0 };
+
+        const card = document.createElement("div");
+        card.className = "job-card";
+        card.id = `job-${id}`;
+        card.innerHTML = `
+        <div class="job-header">
+          <span class="job-title">${esc(album)}<span class="job-artist">${esc(artist)}</span></span>
+          <div class="job-meta">
+            <span class="job-count" id="job-count-${id}">0/${trackCount}</span>
+            <span class="job-status queued" id="job-status-${id}">queued</span>
+          </div>
+        </div>
+        <div class="job-progress"><div class="job-progress-fill" id="job-bar-${id}"></div></div>
+        <div class="job-track-status" id="job-track-${id}" style="display:none">
+          <span id="job-track-label-${id}"></span>
+          <div class="job-track-status-bar"><div class="job-track-status-fill" id="job-track-bar-${id}"></div></div>
+        </div>`;
+        document.getElementById("jobList").appendChild(card);
+        updateQueueBadge();
+      }
+
+      function updateTrackProgress(jobId, idx, phase, pct) {
+        const el = document.getElementById(`job-track-${jobId}`);
+        if (!el) return;
+        el.style.display = "flex";
+        const label = document.getElementById(`job-track-label-${jobId}`);
+        const bar = document.getElementById(`job-track-bar-${jobId}`);
+        if (label)
+          label.textContent = `${phase === "download" ? "↓" : "⚙"} ${idx}  ${pct}%`;
+        if (bar) bar.style.width = `${pct}%`;
+      }
+
+      function clearTrackProgress(jobId) {
+        const el = document.getElementById(`job-track-${jobId}`);
+        if (el) el.style.display = "none";
+      }
+
+      function updateJobProgress(jobId) {
+        const m = jobMeta[jobId];
+        if (!m) return;
+        const countEl = document.getElementById(`job-count-${jobId}`);
+        const barEl = document.getElementById(`job-bar-${jobId}`);
+        if (countEl) countEl.textContent = `${m.done}/${m.total}`;
+        if (barEl) barEl.style.width = `${(m.done / m.total) * 100}%`;
+      }
+
+      function showClearBtn() {
+        hasCompleted = true;
+        document.getElementById("clearBtn").style.display = "";
+      }
+
+      function clearCompleted() {
+        fetch("jobs/clear", { method: "POST" })
+          .then((r) => r.json())
+          .then(() => {
+            document
+              .querySelectorAll(".job-card.done, .job-card.error")
+              .forEach((el) => el.remove());
+            document.getElementById("clearBtn").style.display = "none";
+            hasCompleted = false;
+            const previewVis =
+              document.getElementById("preview").style.display !== "none";
+            if (
+              !document.getElementById("jobList").children.length &&
+              !previewVis
+            ) {
+              document.getElementById("dockEmpty").style.display = "";
+            }
+            updateQueueBadge();
+          });
+      }
+
+      function connectSSE() {
+        if (sse) return;
+        sse = new EventSource(`status?last_id=${lastEventId}`);
+
+        sse.addEventListener("job_update", (e) => {
+          lastEventId = parseInt(e.lastEventId) || lastEventId;
+          const d = JSON.parse(e.data);
+
+          if (!document.getElementById(`job-${d.job_id}`) && d.artist) {
+            addJobCard(d.job_id, d.artist, d.album, d.track_count);
+          }
+
+          const el = document.getElementById(`job-status-${d.job_id}`);
+          if (el) {
+            el.textContent = d.status;
+            el.className = `job-status ${d.status}`;
+          }
+          const card = document.getElementById(`job-${d.job_id}`);
+          if (card) {
+            card.className =
+              d.status === "active"
+                ? "job-card active"
+                : `job-card ${d.status}`;
+          }
+          if (d.track_count != null && jobMeta[d.job_id]) {
+            jobMeta[d.job_id].total = d.track_count;
+            updateJobProgress(d.job_id);
+          }
+          if (
+            (d.status === "done" || d.status === "error") &&
+            jobMeta[d.job_id]
+          ) {
+            jobMeta[d.job_id].done = jobMeta[d.job_id].total;
+            updateJobProgress(d.job_id);
+            clearTrackProgress(d.job_id);
+            showClearBtn();
+          }
+          updateQueueBadge();
+        });
+
+        sse.addEventListener("track_update", (e) => {
+          lastEventId = parseInt(e.lastEventId) || lastEventId;
+          const d = JSON.parse(e.data);
+          if (
+            (d.status === "done" || d.status === "error") &&
+            jobMeta[d.job_id]
+          ) {
+            jobMeta[d.job_id].done++;
+            updateJobProgress(d.job_id);
+            clearTrackProgress(d.job_id);
+          }
+        });
+
+        sse.addEventListener("track_progress", (e) => {
+          lastEventId = parseInt(e.lastEventId) || lastEventId;
+          const d = JSON.parse(e.data);
+          updateTrackProgress(d.job_id, d.index, d.phase, d.pct);
+        });
+
+        sse.addEventListener("log", (e) => {
+          lastEventId = parseInt(e.lastEventId) || lastEventId;
+          const d = JSON.parse(e.data);
+          addLog(d.message);
+        });
+
+        sse.onerror = () => {
+          sse.close();
+          sse = null;
+          setTimeout(connectSSE, 2000);
+        };
+      }
+
+      function addLog(msg) {
+        const log = document.getElementById("log");
+        const div = document.createElement("div");
+        div.textContent = msg;
+        log.appendChild(div);
+        log.scrollTop = log.scrollHeight;
+      }
+
+      function esc(s) {
+        const d = document.createElement("div");
+        d.textContent = s;
+        return d.innerHTML;
+      }
+
+      // On page load, fetch existing jobs and connect SSE
+      fetch("jobs")
+        .then((r) => r.json())
+        .then((existingJobs) => {
+          for (const j of existingJobs) {
+            addJobCard(j.id, j.artist, j.album, j.track_count);
+            const el = document.getElementById(`job-status-${j.id}`);
+            if (el) {
+              el.textContent = j.status;
+              el.className = `job-status ${j.status}`;
+            }
+            const card = document.getElementById(`job-${j.id}`);
+            if (card && j.status === "active")
+              card.className = "job-card active";
+            if (card && j.status === "done") {
+              card.className = "job-card done";
+              showClearBtn();
+            }
+            if (card && j.status === "error") {
+              card.className = "job-card error";
+              showClearBtn();
+            }
+            if (jobMeta[j.id]) {
+              jobMeta[j.id].done =
+                j.tracks_done || (j.status === "done" ? j.track_count : 0);
+              updateJobProgress(j.id);
+            }
+          }
+          updateQueueBadge();
+          connectSSE();
+        });
+    </script>
+  </body>
+</html>

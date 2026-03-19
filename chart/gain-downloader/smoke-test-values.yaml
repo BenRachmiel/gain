@@ -1,0 +1,92 @@
+image:
+  frontend:
+    repository: gitlab.benrachmiel.org:5050/bvf2104/music-downloader-from-csv/frontend
+    tag: 8e032ce355cfa0b4a6a4d8debe257047024b0de4
+    pullPolicy: Always
+  backend:
+    repository: gitlab.benrachmiel.org:5050/bvf2104/music-downloader-from-csv/backend
+    tag: 8e032ce355cfa0b4a6a4d8debe257047024b0de4
+    pullPolicy: Always
+
+config:
+  maxConcurrent: "4"
+  bindAddr: "0.0.0.0:3000"
+
+oauthProxy:
+  issuerURL: https://dex.k8s.benrachmiel.org
+  clientID: music-downloader
+  redirectURL: https://downloader.k8s.benrachmiel.org/oauth2/callback
+  cookieName: _oauth2_proxy_downloader
+  extraArgs:
+    - --skip-provider-button=true
+
+secrets:
+  existingSecret: gain-downloader-secrets
+
+persistence:
+  music:
+    existingClaim: preamp-music
+
+gateway:
+  enabled: true
+  host: downloader.k8s.benrachmiel.org
+
+imagePullSecrets:
+  existingSecret: gitlab-registry
+
+extraObjects:
+  - apiVersion: external-secrets.io/v1
+    kind: ExternalSecret
+    metadata:
+      name: gitlab-registry
+    spec:
+      refreshInterval: 1h
+      secretStoreRef:
+        kind: ClusterSecretStore
+        name: vault
+      target:
+        name: gitlab-registry
+        creationPolicy: Owner
+        template:
+          type: kubernetes.io/dockerconfigjson
+          data:
+            .dockerconfigjson: |
+              {"auths":{"gitlab.benrachmiel.org:5050":{"username":"{{ "{{" }} .username {{ "}}" }}","password":"{{ "{{" }} .password {{ "}}" }}"}}}
+      data:
+        - secretKey: username
+          remoteRef:
+            key: gitlab/music-downloader-deploy
+            property: username
+        - secretKey: password
+          remoteRef:
+            key: gitlab/music-downloader-deploy
+            property: password
+  - apiVersion: external-secrets.io/v1
+    kind: ExternalSecret
+    metadata:
+      name: gain-downloader-secrets
+    spec:
+      refreshInterval: 1h
+      secretStoreRef:
+        kind: ClusterSecretStore
+        name: vault
+      target:
+        name: gain-downloader-secrets
+        deletionPolicy: Retain
+      data:
+        - secretKey: SOURCE_API
+          remoteRef:
+            key: preamp/sources
+            property: source-api
+        - secretKey: SOURCE_MIRRORS
+          remoteRef:
+            key: preamp/sources
+            property: source-mirrors
+        - secretKey: OAUTH2_PROXY_CLIENT_SECRET
+          remoteRef:
+            key: dex/clients
+            property: music-downloader
+        - secretKey: OAUTH2_PROXY_COOKIE_SECRET
+          remoteRef:
+            key: navidrome/oauth2-proxy
+            property: cookie-secret

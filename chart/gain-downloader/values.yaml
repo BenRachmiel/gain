@@ -1,0 +1,52 @@
+image:
+  frontend:
+    repository: ""
+    tag: latest
+    pullPolicy: IfNotPresent
+  backend:
+    repository: ""
+    tag: latest
+    pullPolicy: IfNotPresent
+  oauthProxy:
+    repository: quay.io/oauth2-proxy/oauth2-proxy
+    tag: v7.9.0
+
+config:
+  maxConcurrent: "4"
+  bindAddr: "0.0.0.0:3000"
+
+oauthProxy:
+  issuerURL: ""
+  clientID: ""
+  redirectURL: ""
+  cookieName: _oauth2_proxy_downloader
+  extraArgs: []
+
+secrets:
+  existingSecret: ""
+  sourceAPI: ""
+  sourceMirrors: ""
+  oauthClientSecret: ""
+  oauthCookieSecret: ""
+
+persistence:
+  music:
+    existingClaim: ""
+    storageClass: ""
+    accessMode: ReadWriteMany
+    size: 50Gi
+
+service:
+  type: ClusterIP
+  port: 4180
+
+gateway:
+  enabled: false
+  host: ""
+  gatewayName: main-gateway
+  gatewayNamespace: kube-system
+
+imagePullSecrets:
+  existingSecret: ""
+
+extraObjects: []
