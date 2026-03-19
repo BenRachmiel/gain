@@ -4,13 +4,16 @@ services:
     environment:
       MUSIC_DIR: /music
       MAX_CONCURRENT: "4"
+      BIND_ADDR: "0.0.0.0:3000"
+      SOURCE_API: ${SOURCE_API:?SOURCE_API must be set}
+      SOURCE_MIRRORS: ${SOURCE_MIRRORS:-${SOURCE_API}}
     volumes:
       - music:/music
 
   frontend:
     build: frontend/
     environment:
-      API_UPSTREAM: backend:8080
+      API_UPSTREAM: backend:3000
     ports:
       - "8080:8080"
     depends_on:
