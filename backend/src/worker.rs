@@ -170,6 +170,12 @@ async fn process_job(state: &AppState, job_id: &str) {
         .await;
     tracing::info!(job_id, "Finished: {artist} — {album}");
     state.log(format!("Finished: {artist} — {album}")).await;
+
+    if let Some(url) = &state.config.preamp_scan_url {
+        if let Err(e) = state.http_client.post(url).send().await {
+            tracing::warn!(job_id, "Preamp scan trigger failed: {e}");
+        }
+    }
 }
 
 async fn process_track(state: &AppState, job_id: &str, track: &Track, target_dir: &std::path::Path, cover_data: Option<&Vec<u8>>) {

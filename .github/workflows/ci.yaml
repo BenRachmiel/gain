@@ -75,38 +75,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  build-toolbox:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    env:
-      REPO_LC: ""
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set lowercase repo
-        run: echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
-
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: docker/metadata-action@v5
-        id: meta
-        with:
-          images: ghcr.io/${{ env.REPO_LC }}/images/toolbox
-          tags: |
-            type=sha
-            type=raw,value=latest
-
-      - uses: docker/build-push-action@v6
-        with:
-          context: ./toolbox
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-
   helm:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -123,6 +91,26 @@ jobs:
           helm package chart/gain-downloader
           REPO="${{ github.repository }}"
           helm push gain-downloader-*.tgz "oci://ghcr.io/${REPO,,}/charts"
+
+  notify-rig:
+    needs: [build-backend, build-frontend, helm]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract chart version and short SHA
+        id: meta
+        run: |
+          echo "short=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "chart=$(grep '^version:' chart/gain-downloader/Chart.yaml | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.RIG_DISPATCH_TOKEN }}
+          repository: BenRachmiel/rig
+          event-type: subchart-update
+          client-payload: '{"source":"gain","chartVersion":"${{ steps.meta.outputs.chart }}","frontendTag":"${{ steps.meta.outputs.short }}","backendTag":"${{ steps.meta.outputs.short }}"}'
 
   update-gitops:
     needs: [build-backend, build-frontend]

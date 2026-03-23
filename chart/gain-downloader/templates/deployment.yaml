@@ -25,8 +25,9 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
+        {{- if .Values.frontend.enabled }}
         - name: frontend
-          image: "{{ required "image.frontend.repository is required" .Values.image.frontend.repository }}:{{ .Values.image.frontend.tag }}"
+          image: "{{ required "image.frontend.repository is required when frontend.enabled" .Values.image.frontend.repository }}:{{ .Values.image.frontend.tag }}"
           imagePullPolicy: {{ .Values.image.frontend.pullPolicy }}
           ports:
             - name: frontend
@@ -38,12 +39,19 @@ spec:
               drop:
                 - ALL
             runAsNonRoot: true
+          readinessProbe:
+            httpGet:
+              path: /
+              port: frontend
+            initialDelaySeconds: 2
+            periodSeconds: 10
           resources:
             requests:
               cpu: 10m
               memory: 16Mi
             limits:
               memory: 64Mi
+        {{- end }}
         - name: backend
           image: "{{ required "image.backend.repository is required" .Values.image.backend.repository }}:{{ .Values.image.backend.tag }}"
           imagePullPolicy: {{ .Values.image.backend.pullPolicy }}
@@ -74,6 +82,12 @@ spec:
               drop:
                 - ALL
             runAsNonRoot: true
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: backend
+            initialDelaySeconds: 2
+            periodSeconds: 10
           resources:
             requests:
               cpu: 100m
@@ -84,6 +98,7 @@ spec:
           volumeMounts:
             - name: music
               mountPath: /music
+        {{- if .Values.oauthProxy.enabled }}
         - name: oauth2-proxy
           image: "{{ .Values.image.oauthProxy.repository }}:{{ .Values.image.oauthProxy.tag }}"
           securityContext:
@@ -96,13 +111,25 @@ spec:
             - name: oauth-proxy
               containerPort: 4180
               protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: oauth-proxy
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
           args:
             - --upstream=http://localhost:8080
             - --http-address=0.0.0.0:4180
             - --provider=oidc
-            - --oidc-issuer-url={{ required "oauthProxy.issuerURL is required" .Values.oauthProxy.issuerURL }}
-            - --client-id={{ required "oauthProxy.clientID is required" .Values.oauthProxy.clientID }}
-            - --redirect-url={{ required "oauthProxy.redirectURL is required" .Values.oauthProxy.redirectURL }}
+            - --oidc-issuer-url={{ required "oauthProxy.issuerURL is required when oauthProxy.enabled" .Values.oauthProxy.issuerURL }}
+            - --client-id={{ required "oauthProxy.clientID is required when oauthProxy.enabled" .Values.oauthProxy.clientID }}
+            - --redirect-url={{ required "oauthProxy.redirectURL is required when oauthProxy.enabled" .Values.oauthProxy.redirectURL }}
             - --cookie-name={{ .Values.oauthProxy.cookieName }}
             - --cookie-secure=true
             - --reverse-proxy=true
@@ -122,6 +149,7 @@ spec:
                 secretKeyRef:
                   name: {{ include "gain-downloader.secretName" . }}
                   key: OAUTH2_PROXY_COOKIE_SECRET
+        {{- end }}
       volumes:
         - name: music
           persistentVolumeClaim:

@@ -7,9 +7,15 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
+    {{- if .Values.oauthProxy.enabled }}
     - port: {{ .Values.service.port }}
       targetPort: oauth-proxy
       protocol: TCP
       name: http
+    {{- end }}
+    - port: 3000
+      targetPort: backend
+      protocol: TCP
+      name: backend
   selector:
     {{- include "gain-downloader.selectorLabels" . | nindent 4 }}

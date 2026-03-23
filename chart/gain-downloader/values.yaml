@@ -11,11 +11,15 @@ image:
     repository: quay.io/oauth2-proxy/oauth2-proxy
     tag: v7.9.0
 
+frontend:
+  enabled: true
+
 config:
   maxConcurrent: "4"
   bindAddr: "0.0.0.0:3000"
 
 oauthProxy:
+  enabled: true
   issuerURL: ""
   clientID: ""
   redirectURL: ""

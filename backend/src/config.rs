@@ -6,6 +6,7 @@ pub struct Config {
     pub source_mirrors: Vec<String>,
     pub max_concurrent: usize,
     pub bind_addr: SocketAddr,
+    pub preamp_scan_url: Option<String>,
 }
 
 impl Config {
@@ -30,6 +31,7 @@ impl Config {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(4),
             bind_addr,
+            preamp_scan_url: env::var("PREAMP_SCAN_URL").ok(),
         }
     }
 }
