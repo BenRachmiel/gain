@@ -21,6 +21,7 @@ spec:
         - name: {{ .Values.imagePullSecrets.existingSecret }}
       {{- end }}
       securityContext:
+        fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
       containers:
