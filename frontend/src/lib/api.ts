@@ -22,6 +22,7 @@ export async function startJob(payload: {
   tracks: Track[]
   resolved: boolean
   total_tracks: number
+  cover_url?: string
 }): Promise<string> {
   const data = await json<{ job_id: string }>("/start", {
     method: "POST",

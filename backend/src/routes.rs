@@ -45,6 +45,7 @@ pub struct StartRequest {
     #[serde(default = "default_true")]
     resolved: bool,
     total_tracks: Option<u32>,
+    cover_url: Option<String>,
 }
 
 fn default_true() -> bool {
@@ -65,6 +66,7 @@ pub async fn start_job(
         tracks: req.tracks,
         total_tracks: req.total_tracks,
         resolved: req.resolved,
+        cover_url: req.cover_url,
         status: JobStatus::Queued,
         current_track: None,
         tracks_done: 0,

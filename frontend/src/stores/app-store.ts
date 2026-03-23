@@ -185,7 +185,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Jobs
   queueJob: async (artist, album) => {
-    const { resolvedTracks, selectedTrackIndices, totalTracks, resolvingAlbumId } = get()
+    const { resolvedTracks, selectedTrackIndices, totalTracks, resolvingAlbumId, resolveMeta } = get()
     const resolved = resolvingAlbumId === null
     const selectedTracks = resolvedTracks.filter((t) =>
       selectedTrackIndices.has(t.index),
@@ -197,6 +197,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       tracks: selectedTracks,
       resolved,
       total_tracks: totalTracks || selectedTracks.length,
+      cover_url: resolveMeta?.cover_url,
     })
 
     const newJob: JobState = {

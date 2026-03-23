@@ -66,6 +66,7 @@ pub struct Job {
     pub tracks: Vec<Track>,
     pub total_tracks: Option<u32>,
     pub resolved: bool,
+    pub cover_url: Option<String>,
     pub status: JobStatus,
     pub current_track: Option<u32>,
     pub tracks_done: u32,

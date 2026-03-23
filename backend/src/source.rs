@@ -182,12 +182,23 @@ pub async fn resolve_album_stream(
             .cloned()
             .unwrap_or_default();
 
+        let cover = album_data["cover"].as_str().unwrap_or("");
+        let cover_url = if cover.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "https://resources.tidal.com/images/{}/1280x1280.jpg",
+                cover.replace('-', "/")
+            )
+        };
+
         let meta = json!({
             "artist": artist,
             "album": album_clean,
             "matched_artist": matched,
             "existing_artists": existing_artists,
             "total": items.len(),
+            "cover_url": cover_url,
         });
 
         let _ = tx

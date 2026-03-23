@@ -27,6 +27,31 @@ pub fn tag_mp3(
     Ok(())
 }
 
+pub fn embed_cover_art(
+    path: &Path,
+    image_data: &[u8],
+    mime: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let tagged_file = lofty::read_from_path(path)?;
+    let mut tag: Id3v2Tag = tagged_file
+        .tag(TagType::Id3v2)
+        .map(|t| t.clone().into())
+        .unwrap_or_default();
+
+    let frame_id = FrameId::Valid(Cow::Borrowed("APIC"));
+    let mut apic_data = Vec::new();
+    apic_data.push(0x00); // UTF-8 encoding
+    apic_data.extend_from_slice(mime.as_bytes());
+    apic_data.push(0x00); // null terminator for mime
+    apic_data.push(0x03); // picture type: front cover
+    apic_data.push(0x00); // empty description (null terminator)
+    apic_data.extend_from_slice(image_data);
+
+    tag.insert(BinaryFrame::new(frame_id, apic_data).into());
+    tag.save_to_path(path, WriteOptions::default())?;
+    Ok(())
+}
+
 pub fn embed_lyrics(
     path: &Path,
     lyrics: &[(String, u32)],

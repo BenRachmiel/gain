@@ -37,10 +37,10 @@ async fn process_job(state: &AppState, job_id: &str) {
         }
     }
 
-    let (artist, album) = {
+    let (artist, album, cover_url) = {
         let inner = state.inner.read().await;
         let job = inner.jobs.iter().find(|j| j.id == job_id).unwrap();
-        (job.artist.clone(), job.album.clone())
+        (job.artist.clone(), job.album.clone(), job.cover_url.clone())
     };
 
     tracing::info!(job_id, "Starting: {artist} — {album}");
@@ -65,6 +65,43 @@ async fn process_job(state: &AppState, job_id: &str) {
         return;
     }
 
+    // Download cover art
+    let cover_data: Option<Vec<u8>> = match &cover_url {
+        Some(url) if !url.is_empty() => {
+            match state.http_client.get(url).timeout(std::time::Duration::from_secs(30)).send().await {
+                Ok(resp) if resp.status().is_success() => {
+                    match resp.bytes().await {
+                        Ok(bytes) => {
+                            let data = bytes.to_vec();
+                            // Save cover.jpg to album directory
+                            let cover_path = target_dir.join("cover.jpg");
+                            if let Err(e) = tokio::fs::write(&cover_path, &data).await {
+                                tracing::warn!(job_id, "Failed to write cover.jpg: {e}");
+                            }
+                            tracing::info!(job_id, "Cover art downloaded ({} bytes)", data.len());
+                            state.log("Cover art downloaded".to_string()).await;
+                            Some(data)
+                        }
+                        Err(e) => {
+                            tracing::warn!(job_id, "Failed to download cover art: {e}");
+                            None
+                        }
+                    }
+                }
+                Ok(resp) => {
+                    tracing::warn!(job_id, "Cover art fetch returned {}", resp.status());
+                    None
+                }
+                Err(e) => {
+                    tracing::warn!(job_id, "Cover art fetch failed: {e}");
+                    None
+                }
+            }
+        }
+        _ => None,
+    };
+    let cover_data: Option<std::sync::Arc<Vec<u8>>> = cover_data.map(std::sync::Arc::new);
+
     let semaphore = std::sync::Arc::new(Semaphore::new(state.config.max_concurrent));
     let mut processed = 0;
 
@@ -84,9 +121,10 @@ async fn process_job(state: &AppState, job_id: &str) {
                 let state = state.clone();
                 let job_id = job_id.to_string();
                 let target_dir = target_dir.clone();
+                let cover_data = cover_data.clone();
 
                 handles.push(tokio::spawn(async move {
-                    process_track(&state, &job_id, &track, &target_dir).await;
+                    process_track(&state, &job_id, &track, &target_dir, cover_data.as_deref()).await;
                     drop(permit);
                 }));
                 processed += 1;
@@ -134,7 +172,7 @@ async fn process_job(state: &AppState, job_id: &str) {
     state.log(format!("Finished: {artist} — {album}")).await;
 }
 
-async fn process_track(state: &AppState, job_id: &str, track: &Track, target_dir: &std::path::Path) {
+async fn process_track(state: &AppState, job_id: &str, track: &Track, target_dir: &std::path::Path, cover_data: Option<&Vec<u8>>) {
     let idx = track.index;
     let title = &track.title;
     let safe_title = util::clean_filename(title);
@@ -200,6 +238,12 @@ async fn process_track(state: &AppState, job_id: &str, track: &Track, target_dir
                 }
                 None => {
                     tracing::debug!(job_id, "No lyrics found: {title}");
+                }
+            }
+
+            if let Some(cover) = cover_data {
+                if let Err(e) = crate::tagging::embed_cover_art(&mp3_path, cover, "image/jpeg") {
+                    tracing::warn!(job_id, "Cover art embed failed for {title}: {e}");
                 }
             }
 

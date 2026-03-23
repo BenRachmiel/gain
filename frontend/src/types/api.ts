@@ -22,6 +22,7 @@ export interface ResolveMeta {
   matched_artist: string | null
   existing_artists: string[]
   total: number
+  cover_url?: string
 }
 
 export interface Job {
