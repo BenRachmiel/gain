@@ -21,11 +21,10 @@ pub async fn source_get(
             .await
         {
             Ok(resp) => {
-                if resp.status().as_u16() == 429 {
-                    last_err = Some(format!("429 from {mirror}").into());
+                if !resp.status().is_success() {
+                    last_err = Some(format!("{} from {mirror}", resp.status()).into());
                     continue;
                 }
-                let resp = resp.error_for_status()?;
                 return Ok(resp.json().await?);
             }
             Err(e) => {
