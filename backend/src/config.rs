@@ -29,7 +29,7 @@ impl Config {
             max_concurrent: env::var("MAX_CONCURRENT")
                 .ok()
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(4),
+                .unwrap_or(10),
             bind_addr,
             preamp_scan_url: env::var("PREAMP_SCAN_URL").ok(),
         }

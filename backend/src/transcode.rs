@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::state::AppState;
 
-/// Download FLAC data into memory, then transcode to MP3 320k writing directly to `mp3_path`.
+/// Stream FLAC download to a temp file, then transcode to MP3 320k writing directly to `mp3_path`.
 pub async fn download_and_transcode(
     state: &AppState,
     url: &str,
@@ -19,21 +19,22 @@ pub async fn download_and_transcode(
         .await?;
 
     let content_length = resp.content_length().unwrap_or(0);
-    let mut flac_buf: Vec<u8> = if content_length > 0 {
-        Vec::with_capacity(content_length as usize)
-    } else {
-        Vec::new()
-    };
+    let tmp_path = mp3_path.with_extension(format!("{track_index}.flac.tmp"));
 
+    // Stream download directly to disk instead of buffering in memory
+    let mut downloaded: u64 = 0;
     let mut last_dl_pct: i32 = -1;
     {
         use futures::StreamExt;
+        use tokio::io::AsyncWriteExt;
+        let mut file = tokio::io::BufWriter::new(tokio::fs::File::create(&tmp_path).await?);
         let mut stream = resp.bytes_stream();
         while let Some(chunk) = stream.next().await {
             let chunk = chunk?;
-            flac_buf.extend_from_slice(&chunk);
+            file.write_all(&chunk).await?;
+            downloaded += chunk.len() as u64;
             if content_length > 0 {
-                let pct = (flac_buf.len() as u64 * 100 / content_length) as i32;
+                let pct = (downloaded * 100 / content_length) as i32;
                 if pct >= last_dl_pct + 5 {
                     last_dl_pct = pct;
                     state
@@ -48,25 +49,28 @@ pub async fn download_and_transcode(
                 }
             }
         }
+        file.flush().await?;
     }
 
-    tracing::info!(job_id, "Track {track_index}: downloaded {} bytes, transcoding", flac_buf.len());
+    tracing::info!(job_id, "Track {track_index}: downloaded {downloaded} bytes, transcoding");
 
     let mp3_path = mp3_path.to_path_buf();
+    let tmp_path_clone = tmp_path.clone();
     let job_id_owned = job_id.to_string();
     let state_clone = state.clone();
     let rt = tokio::runtime::Handle::current();
 
-    tokio::task::spawn_blocking(move || {
-        transcode_flac_to_mp3(&flac_buf, &mp3_path, duration_s, &job_id_owned, track_index, &state_clone, &rt)
+    let result = tokio::task::spawn_blocking(move || {
+        transcode_flac_to_mp3(&tmp_path_clone, &mp3_path, duration_s, &job_id_owned, track_index, &state_clone, &rt)
     })
-    .await??;
+    .await?;
 
-    Ok(())
+    let _ = tokio::fs::remove_file(&tmp_path).await;
+    result
 }
 
 fn transcode_flac_to_mp3(
-    flac_data: &[u8],
+    flac_path: &Path,
     mp3_path: &Path,
     duration_s: u64,
     job_id: &str,
@@ -77,11 +81,7 @@ fn transcode_flac_to_mp3(
     use ffmpeg_the_third as ffmpeg;
     ffmpeg::init().map_err(|e| format!("ffmpeg init: {e}"))?;
 
-    let tmp_path = mp3_path.with_extension(format!("{track_index}.flac.tmp"));
-    std::fs::write(&tmp_path, flac_data)?;
-
-    let result = do_transcode(&tmp_path, mp3_path, duration_s, job_id, track_index, state, rt);
-    let _ = std::fs::remove_file(&tmp_path);
+    let result = do_transcode(flac_path, mp3_path, duration_s, job_id, track_index, state, rt);
     result
 }
 
