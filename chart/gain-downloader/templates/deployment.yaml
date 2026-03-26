@@ -50,7 +50,7 @@ spec:
               cpu: 10m
               memory: 16Mi
             limits:
-              memory: 64Mi
+              memory: 512Mi
         {{- end }}
         - name: backend
           image: "{{ required "image.backend.repository is required" .Values.image.backend.repository }}:{{ .Values.image.backend.tag }}"
