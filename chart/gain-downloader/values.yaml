@@ -1,10 +1,10 @@
 image:
   frontend:
-    repository: ""
+    repository: ghcr.io/benrachmiel/gain/images/frontend
     tag: latest
     pullPolicy: IfNotPresent
   backend:
-    repository: ""
+    repository: ghcr.io/benrachmiel/gain/images/backend
     tag: latest
     pullPolicy: IfNotPresent
   oauthProxy:
