@@ -1,6 +1,6 @@
 apiVersion: v2
 name: gain-downloader
 description: Music downloader with source API integration and oauth2-proxy sidecar
-version: 0.2.3
-appVersion: "0.2.3"
+version: 0.2.4
+appVersion: "0.2.4"
 type: application
