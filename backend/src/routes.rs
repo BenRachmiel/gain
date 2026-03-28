@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use std::convert::Infallible;
 use tokio_stream::Stream;
 
-use crate::source;
+use crate::sources::SourceType;
 use crate::state::{AppState, Job, JobStatus, Track};
 
 // --- Search ---
@@ -19,6 +19,14 @@ use crate::state::{AppState, Job, JobStatus, Track};
 #[derive(Deserialize)]
 pub struct SearchQuery {
     q: String,
+    #[serde(default)]
+    source: SourceType,
+    #[serde(default = "default_one")]
+    page: u32,
+}
+
+fn default_one() -> u32 {
+    1
 }
 
 pub async fn search(
@@ -29,7 +37,8 @@ pub async fn search(
     if q.is_empty() {
         return Json(json!({"error": "No query"}));
     }
-    match source::search_albums(&state, &q).await {
+    let source = state.get_source(query.source);
+    match source.search(&q, query.page, &state).await {
         Ok(albums) => Json(json!({"albums": albums})),
         Err(e) => Json(json!({"error": e.to_string()})),
     }
@@ -46,6 +55,8 @@ pub struct StartRequest {
     resolved: bool,
     total_tracks: Option<u32>,
     cover_url: Option<String>,
+    #[serde(default = "default_one")]
+    total_discs: u32,
 }
 
 fn default_true() -> bool {
@@ -70,6 +81,7 @@ pub async fn start_job(
         status: JobStatus::Queued,
         current_track: None,
         tracks_done: 0,
+        total_discs: req.total_discs,
     };
 
     state.inner.write().await.jobs.push(job);
@@ -238,12 +250,21 @@ pub async fn status_stream(
 
 // --- Resolve album SSE ---
 
+#[derive(Deserialize)]
+pub struct ResolveQuery {
+    #[serde(default)]
+    source: SourceType,
+}
+
 pub async fn resolve_album(
     State(state): State<AppState>,
-    Path(album_id): Path<u64>,
+    Path(album_id): Path<String>,
+    Query(query): Query<ResolveQuery>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let source = state.get_source(query.source);
+
     let stream = async_stream::stream! {
-        match source::resolve_album_stream(&state, album_id).await {
+        match source.resolve_album(&album_id, &state).await {
             Ok(mut rx) => {
                 while let Some(event) = rx.recv().await {
                     yield Ok::<_, Infallible>(event);

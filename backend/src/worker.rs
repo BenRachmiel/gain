@@ -2,6 +2,7 @@ use serde_json::json;
 use std::path::PathBuf;
 use tokio::sync::Semaphore;
 
+use crate::sources::youtube::YouTubeSource;
 use crate::state::{AppState, JobStatus, Track};
 use crate::transcode;
 use crate::util;
@@ -180,15 +181,22 @@ async fn process_job(state: &AppState, job_id: &str) {
 
 async fn process_track(state: &AppState, job_id: &str, track: &Track, target_dir: &std::path::Path, cover_data: Option<&Vec<u8>>) {
     let idx = track.index;
+    let disc = track.disc;
     let title = &track.title;
     let safe_title = util::clean_filename(title);
-    let mp3_path = target_dir.join(format!("{idx:02} - {safe_title}.mp3"));
     let duration_s = util::parse_duration(&track.duration);
 
-    let total = {
+    let (total, total_discs) = {
         let inner = state.inner.read().await;
         let job = inner.jobs.iter().find(|j| j.id == job_id).unwrap();
-        job.total_tracks.unwrap_or(job.tracks.len() as u32)
+        (job.total_tracks.unwrap_or(job.tracks.len() as u32), job.total_discs)
+    };
+
+    // Include disc number in filename only for multi-disc albums
+    let mp3_path = if total_discs > 1 {
+        target_dir.join(format!("{disc}-{idx:02} - {safe_title}.mp3"))
+    } else {
+        target_dir.join(format!("{idx:02} - {safe_title}.mp3"))
     };
 
     // Update current track
@@ -208,15 +216,33 @@ async fn process_track(state: &AppState, job_id: &str, track: &Track, target_dir
         )
         .await;
 
-    // Download + transcode
-    state
-        .emit(
-            "track_update",
-            json!({"job_id": job_id, "index": idx, "title": title, "status": "downloading"}),
-        )
-        .await;
+    // Resolve ytdl: URLs via yt-dlp before downloading
+    let download_url = if let Some(video_id) = track.url.strip_prefix("ytdl:") {
+        let yt = YouTubeSource::new(state.config.yt_dlp_path.clone());
+        match yt.resolve_audio_url(video_id).await {
+            Ok(url) => url,
+            Err(e) => {
+                tracing::error!(job_id, "Track {idx} URL resolve failed: {e}");
+                state.log(format!("[{idx}/{total}] FAILED: {title} — {e}")).await;
+                let mut inner = state.inner.write().await;
+                if let Some(job) = inner.jobs.iter_mut().find(|j| j.id == job_id) {
+                    job.tracks_done += 1;
+                }
+                state
+                    .emit(
+                        "track_update",
+                        json!({"job_id": job_id, "index": idx, "title": title, "status": "error", "error": e.to_string()}),
+                    )
+                    .await;
+                return;
+            }
+        }
+    } else {
+        track.url.clone()
+    };
 
-    match transcode::download_and_transcode(state, &track.url, &mp3_path, job_id, idx, duration_s)
+    // Download + transcode
+    match transcode::download_and_transcode(state, &download_url, &mp3_path, job_id, idx, duration_s)
         .await
     {
         Ok(()) => {
@@ -230,7 +256,7 @@ async fn process_track(state: &AppState, job_id: &str, track: &Track, target_dir
             // Tag + lyrics
             let artist = &track.artist;
             let album = &track.album;
-            if let Err(e) = crate::tagging::tag_mp3(&mp3_path, title, artist, album, idx, total) {
+            if let Err(e) = crate::tagging::tag_mp3(&mp3_path, title, artist, album, idx, total, disc, total_discs) {
                 tracing::warn!(job_id, "Tagging failed for {title}: {e}");
             }
 

@@ -7,11 +7,12 @@ pub struct Config {
     pub max_concurrent: usize,
     pub bind_addr: SocketAddr,
     pub preamp_scan_url: Option<String>,
+    pub yt_dlp_path: String,
 }
 
 impl Config {
     pub fn from_env() -> Self {
-        let source_api = env::var("SOURCE_API").expect("SOURCE_API must be set");
+        let source_api = env::var("SOURCE_API").unwrap_or_default();
         let mirrors: Vec<String> = env::var("SOURCE_MIRRORS")
             .unwrap_or_else(|_| source_api.clone())
             .split(',')
@@ -32,6 +33,7 @@ impl Config {
                 .unwrap_or(10),
             bind_addr,
             preamp_scan_url: env::var("PREAMP_SCAN_URL").ok(),
+            yt_dlp_path: env::var("YT_DLP_PATH").unwrap_or_else(|_| "yt-dlp".into()),
         }
     }
 }

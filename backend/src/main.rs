@@ -1,7 +1,7 @@
 mod config;
 mod lyrics;
 mod routes;
-mod source;
+mod sources;
 mod state;
 mod tagging;
 mod transcode;

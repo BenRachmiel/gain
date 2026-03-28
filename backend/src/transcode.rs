@@ -19,7 +19,7 @@ pub async fn download_and_transcode(
         .await?;
 
     let content_length = resp.content_length().unwrap_or(0);
-    let tmp_path = mp3_path.with_extension(format!("{track_index}.flac.tmp"));
+    let tmp_path = mp3_path.with_extension(format!("{track_index}.audio.tmp"));
 
     // Stream download directly to disk instead of buffering in memory
     let mut downloaded: u64 = 0;
@@ -70,7 +70,7 @@ pub async fn download_and_transcode(
 }
 
 fn transcode_flac_to_mp3(
-    flac_path: &Path,
+    input_path: &Path,
     mp3_path: &Path,
     duration_s: u64,
     job_id: &str,
@@ -81,7 +81,7 @@ fn transcode_flac_to_mp3(
     use ffmpeg_the_third as ffmpeg;
     ffmpeg::init().map_err(|e| format!("ffmpeg init: {e}"))?;
 
-    let result = do_transcode(flac_path, mp3_path, duration_s, job_id, track_index, state, rt);
+    let result = do_transcode(input_path, mp3_path, duration_s, job_id, track_index, state, rt);
     result
 }
 
@@ -135,7 +135,7 @@ impl PlanarFifo {
 }
 
 fn do_transcode(
-    flac_path: &Path,
+    input_path: &Path,
     mp3_path: &Path,
     duration_s: u64,
     job_id: &str,
@@ -145,17 +145,21 @@ fn do_transcode(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use ffmpeg_the_third as ffmpeg;
 
-    let mut ictx = ffmpeg::format::input(flac_path)?;
+    let mut ictx = ffmpeg::format::input(input_path)?;
 
     let audio_stream = ictx
         .streams()
         .best(ffmpeg::media::Type::Audio)
-        .ok_or("No audio stream in FLAC")?;
+        .ok_or("No audio stream in input")?;
     let audio_stream_index = audio_stream.index();
 
-    // Decoder
-    let decoder_codec =
-        ffmpeg::codec::decoder::find(ffmpeg::codec::Id::FLAC).ok_or("FLAC decoder not found")?;
+    // Decoder — auto-detect codec from input stream
+    let codec_id = unsafe {
+        let params = (*audio_stream.as_ptr()).codecpar;
+        (*params).codec_id
+    };
+    let decoder_codec = ffmpeg::codec::decoder::find(codec_id.into())
+        .ok_or_else(|| format!("Decoder not found for codec {:?}", codec_id))?;
     let mut dec_ctx = ffmpeg::codec::Context::new_with_codec(decoder_codec);
     dec_ctx.set_parameters(audio_stream.parameters())?;
     let mut decoder = dec_ctx.decoder().audio()?;

@@ -18,8 +18,11 @@ RUN curl -L https://ffmpeg.org/releases/ffmpeg-7.1.1.tar.xz | tar xJ --strip-com
       --cc=musl-gcc \
       --disable-everything --disable-programs --disable-doc --disable-network --disable-autodetect \
       --enable-small \
-      --enable-decoder=flac --enable-encoder=libmp3lame \
-      --enable-demuxer=flac --enable-muxer=mp3 \
+      --enable-decoder=flac --enable-decoder=opus --enable-decoder=vorbis --enable-decoder=aac \
+      --enable-encoder=libmp3lame \
+      --enable-demuxer=flac --enable-demuxer=ogg --enable-demuxer=matroska --enable-demuxer=mov --enable-demuxer=aac \
+      --enable-muxer=mp3 \
+      --enable-parser=opus --enable-parser=vorbis --enable-parser=aac \
       --enable-protocol=file --enable-protocol=pipe \
       --enable-libmp3lame --enable-swresample --enable-gpl \
       --enable-static --disable-shared \
@@ -50,10 +53,12 @@ ENV RUSTFLAGS="-L /opt/lame/lib -l static=mp3lame"
 
 RUN cargo build --release --target x86_64-unknown-linux-musl
 
-# --- Stage 3: scratch ---
-FROM scratch
+# --- Stage 3: runtime ---
+FROM python:3.12-alpine
 
-COPY --from=rust-builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+RUN pip install --no-cache-dir yt-dlp && \
+    apk add --no-cache ca-certificates
+
 COPY --from=rust-builder /app/target/x86_64-unknown-linux-musl/release/music-downloader /music-downloader
 USER 1000
 EXPOSE 8080

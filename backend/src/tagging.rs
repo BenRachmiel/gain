@@ -15,6 +15,8 @@ pub fn tag_mp3(
     album: &str,
     track_number: u32,
     track_total: u32,
+    disc_number: u32,
+    disc_total: u32,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut tag = Id3v2Tag::default();
     tag.set_title(title.to_string());
@@ -22,6 +24,8 @@ pub fn tag_mp3(
     tag.set_album(album.to_string());
     tag.set_track(track_number);
     tag.set_track_total(track_total);
+    tag.set_disk(disc_number);
+    tag.set_disk_total(disc_total);
 
     tag.save_to_path(path, WriteOptions::default())?;
     Ok(())
